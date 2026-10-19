@@ -123,7 +123,9 @@ const setDocumentSchema = z.object({
     version: z.number().int(),
     ranges: rangesSchemas.ranges,
     lastUpdatedAt: z.coerce.number().int().positive().nullish(),
-    lastUpdatedBy: zz.objectId().nullish(),
+    // the last update may have been made by a link-sharing visitor without an
+    // account, for whom real-time uses the sentinel 'anonymous-user'
+    lastUpdatedBy: zz.objectId().or(z.literal('anonymous-user')).nullish(),
   }),
 })
 
@@ -132,7 +134,10 @@ async function setDocument(req, res) {
     logOnly: true,
   })
   const { Project_id: projectId, doc_id: docId } = params
-  const { lines, version, ranges, lastUpdatedAt, lastUpdatedBy } = body
+  const { lines, version, ranges, lastUpdatedAt } = body
+  // Project.lastUpdatedBy is an ObjectId, so don't store the sentinel
+  const lastUpdatedBy =
+    body.lastUpdatedBy === 'anonymous-user' ? null : body.lastUpdatedBy
   const result = await ProjectEntityUpdateHandler.promises.updateDocLines(
     projectId,
     docId,

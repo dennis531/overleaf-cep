@@ -1,4 +1,5 @@
-import { beforeEach, describe, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, it, vi } from 'vitest'
+import { setReqValidationModeForTests } from '@overleaf/validation-tools'
 import sinon from 'sinon'
 import MockRequest from '../helpers/MockRequest.mjs'
 import MockResponse from '../helpers/MockResponse.mjs'
@@ -233,6 +234,46 @@ describe('DocumentController', function () {
           'docModified',
           ctx.project._id,
           ctx.doc._id
+        )
+      })
+    })
+
+    describe('when the last update was made by an anonymous link-sharing user', function () {
+      beforeEach(async function (ctx) {
+        setReqValidationModeForTests('enforce-log')
+        await new Promise(resolve => {
+          ctx.req.body = {
+            lines: ctx.doc_lines,
+            version: ctx.version,
+            ranges: ctx.ranges,
+            lastUpdatedAt: ctx.lastUpdatedAt,
+            lastUpdatedBy: 'anonymous-user',
+          }
+          ctx.res.callback = err => {
+            resolve(err)
+          }
+          ctx.next.callsFake(() => {
+            resolve()
+          })
+          ctx.DocumentController.setDocument(ctx.req, ctx.res, ctx.next)
+        })
+      })
+
+      afterEach(function () {
+        setReqValidationModeForTests(null)
+      })
+
+      it('should accept the request and not store the sentinel as user id', function (ctx) {
+        sinon.assert.notCalled(ctx.next)
+        sinon.assert.calledWith(
+          ctx.ProjectEntityUpdateHandler.promises.updateDocLines,
+          ctx.project._id,
+          ctx.doc._id,
+          ctx.doc_lines,
+          ctx.version,
+          ctx.ranges,
+          Number(ctx.lastUpdatedAt),
+          null
         )
       })
     })
